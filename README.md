@@ -1,23 +1,8 @@
-# BP Monitor
+# Family BP Monitor v2
+Multi-user family blood pressure tracker for GitHub Pages.
 
-A simple, privacy-friendly blood pressure tracker designed for GitHub Pages.
+Features: family profiles, separate readings, multiple readings/day, pulse, arm, position, context, notes, simple BP labels, today/7-day/30-day averages, CSV export, browser-local storage.
 
-## Features
-- Multiple readings per day
-- Date/time, systolic, diastolic, pulse
-- Arm and body position
-- Optional notes
-- Today count, average BP, and latest reading
-- Delete individual readings or clear all
-- CSV export for sharing with a doctor
-- No server/database required
-- Data is stored locally in the browser via `localStorage`
+Upload `index.html`, `style.css`, `app.js`, and `README.md` to your GitHub repository. Enable Pages from `main` / root.
 
-## GitHub Pages
-1. Create a new GitHub repository.
-2. Upload `index.html`, `style.css`, and `app.js`.
-3. In **Settings → Pages**, select deployment from the `main` branch and root folder.
-4. Open the generated GitHub Pages URL.
-
-## Important
-This is a tracking tool, not a diagnostic device or medical advice. Keep a backup by exporting CSV regularly. Clearing browser/site data can remove locally stored readings.
+No readings are uploaded to GitHub. Browser/site-data clearing can erase readings, so export backups regularly. This is a tracking tool, not a diagnosis.
