@@ -1,0 +1,93 @@
+const {createClient}=window.supabase; const cfg=window.SUPABASE_CONFIG||{};
+let sb, user=null, members=[], memberId=null, readings=[], mode='signin', recoveryMode=false;
+const $=id=>document.getElementById(id); const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function status(id,msg,error=false){$(id).textContent=msg;$(id).className='status '+(error?'error':'success')}
+function nowLocal(){let d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
+function fmt(v){return new Date(v).toLocaleString([],{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
+function cat(s,d){if(s>=180||d>=120)return'Critical';if(s>=140||d>=90)return'High';if(s>=130||d>=80)return'Elevated';return'Normal'}
+function avg(a){if(!a.length)return'—';return `${Math.round(a.reduce((x,r)=>x+r.systolic,0)/a.length)}/${Math.round(a.reduce((x,r)=>x+r.diastolic,0)/a.length)}`}
+async function start(){
+ if(!cfg.url||cfg.url.includes('PASTE_')||!cfg.key||cfg.key.includes('PASTE_')){$('authBtn').disabled=true;status('authStatus','Add Supabase URL and publishable/anon key to config.js.',true);return}
+ sb=createClient(cfg.url,cfg.key); $('readingAt').value=nowLocal();
+ sb.auth.onAuthStateChange((event,s)=>{ if(event==='PASSWORD_RECOVERY'){ showNewPasswordPanel(); return; } sessionChanged(s); });
+ const {data:{session}}=await sb.auth.getSession(); await sessionChanged(session);
+}
+async function sessionChanged(s){user=s?.user||null;if(recoveryMode)return;if(!user){$('auth').classList.remove('hidden');$('app').classList.add('hidden');$('signOut').classList.add('hidden');$('userEmail').textContent='';return} $('auth').classList.add('hidden');$('app').classList.remove('hidden');$('signOut').classList.remove('hidden');$('userEmail').textContent=user.email||''; await sb.from('profiles').upsert({id:user.id,email:user.email}); await loadMembers()}
+async function auth(e){e.preventDefault();$('authBtn').disabled=true;status('authStatus','Working…');try{let r=mode==='signin'?await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value}):await sb.auth.signUp({email:$('email').value.trim(),password:$('password').value});if(r.error)throw r.error;status('authStatus',mode==='signin'?'Signed in.':'Account created. Check email if confirmation is enabled.')}catch(e){status('authStatus',e.message,true)}$('authBtn').disabled=false}
+
+function showResetRequest(){
+  recoveryMode=false;
+  $('authForm').classList.add('hidden');
+  $('toggleAuth').classList.add('hidden');
+  $('forgotPassword').classList.add('hidden');
+  $('resetPanel').classList.remove('hidden');
+  $('newPasswordPanel').classList.add('hidden');
+  $('authTitle').textContent='Reset password';
+  $('authHint').textContent='Enter the email address associated with your account.';
+  $('resetEmail').value=$('email').value.trim();
+  status('authStatus','');
+}
+function showSignIn(){
+  recoveryMode=false;
+  $('authForm').classList.remove('hidden');
+  $('toggleAuth').classList.remove('hidden');
+  $('forgotPassword').classList.remove('hidden');
+  $('resetPanel').classList.add('hidden');
+  $('newPasswordPanel').classList.add('hidden');
+  $('authTitle').textContent='Sign in';
+  $('authHint').textContent='Use the same account on your phone, tablet and computer.';
+  mode='signin'; $('authBtn').textContent='Sign in'; $('toggleAuth').textContent='Create an account instead';
+  status('authStatus','');
+}
+function showNewPasswordPanel(){
+  recoveryMode=true;
+  $('auth').classList.remove('hidden'); $('app').classList.add('hidden'); $('signOut').classList.add('hidden');
+  $('authForm').classList.add('hidden'); $('toggleAuth').classList.add('hidden'); $('forgotPassword').classList.add('hidden'); $('resetPanel').classList.add('hidden');
+  $('newPasswordPanel').classList.remove('hidden');
+  $('authTitle').textContent='Choose a new password';
+  $('authHint').textContent='Enter and confirm your new password.';
+  status('authStatus','');
+}
+async function requestPasswordReset(e){
+  e.preventDefault();
+  $('resetRequestBtn').disabled=true; status('authStatus','Sending reset link…');
+  try{
+    const email=$('resetEmail').value.trim();
+    const redirectTo=window.location.origin+window.location.pathname;
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
+    if(error)throw error;
+    status('authStatus','If an account exists for that email, a password reset link has been sent. Check your inbox.');
+  }catch(e){status('authStatus',e.message,true)}
+  $('resetRequestBtn').disabled=false;
+}
+async function updatePassword(e){
+  e.preventDefault();
+  const p=$('newPassword').value, c=$('confirmPassword').value;
+  if(p!==c)return status('authStatus','The passwords do not match.',true);
+  $('newPasswordBtn').disabled=true; status('authStatus','Updating password…');
+  try{
+    const {error}=await sb.auth.updateUser({password:p});
+    if(error)throw error;
+    recoveryMode=false; $('newPassword').value=''; $('confirmPassword').value='';
+    status('authStatus','Password updated successfully. You can now sign in with your new password.');
+    await sb.auth.signOut(); showSignIn();
+  }catch(e){status('authStatus',e.message,true)}
+  $('newPasswordBtn').disabled=false;
+}
+function toggleAuth(){mode=mode==='signin'?'signup':'signin';$('authTitle').textContent=mode==='signin'?'Sign in':'Create account';$('authBtn').textContent=mode==='signin'?'Sign in':'Create account';$('toggleAuth').textContent=mode==='signin'?'Create an account instead':'I already have an account';$('authHint').textContent=mode==='signin'?'Use the same account on your phone, tablet and computer.':'Create one family account, then add family members.'}
+async function loadMembers(){let r=await sb.from('family_members').select('*').order('name');if(r.error)return status('saveStatus',r.error.message,true);members=r.data||[];if(!members.length){let n=(user.email||'Family').split('@')[0];r=await sb.from('family_members').insert({owner_id:user.id,name:n}).select().single();if(r.error)return status('saveStatus',r.error.message,true);members=[r.data]}if(!memberId||!members.some(x=>x.id===memberId))memberId=members[0].id;renderMembers();await refresh()}
+function renderMembers(){ $('memberSelect').innerHTML=members.map(m=>`<option value="${esc(m.id)}" ${m.id===memberId?'selected':''}>${esc(m.name)}</option>`).join('');let m=members.find(x=>x.id===memberId);$('memberMeta').textContent=m?[m.date_of_birth?'DOB: '+m.date_of_birth:'',m.notes||''].filter(Boolean).join(' • '):'' }
+async function refresh(){let r=await sb.from('bp_readings').select('*').eq('member_id',memberId).order('reading_at',{ascending:false});if(r.error)return status('saveStatus',r.error.message,true);readings=r.data||[];render();}
+function render(){let n=new Date(), d7=new Date(n);d7.setDate(n.getDate()-7);let d30=new Date(n);d30.setDate(n.getDate()-30);let today=n.toLocaleDateString();$('today').textContent=readings.filter(r=>new Date(r.reading_at).toLocaleDateString()===today).length;$('avg7').textContent=avg(readings.filter(r=>new Date(r.reading_at)>=d7));$('avg30').textContent=avg(readings.filter(r=>new Date(r.reading_at)>=d30));$('latest').textContent=readings[0]?`${readings[0].systolic}/${readings[0].diastolic}`:'—';$('latestAt').textContent=readings[0]?fmt(readings[0].reading_at):'No readings';$('rows').innerHTML=readings.slice(0,50).map(r=>`<tr><td>${esc(fmt(r.reading_at))}</td><td><b>${r.systolic}/${r.diastolic}</b></td><td>${r.pulse??'—'}</td><td>${esc(r.context)}</td><td><span class="badge ${cat(r.systolic,r.diastolic).toLowerCase()}">${cat(r.systolic,r.diastolic)}</span></td><td><button class="del" data-id="${esc(r.id)}">Delete</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">No readings yet.</td></tr>';document.querySelectorAll('.del').forEach(b=>b.onclick=()=>delReading(b.dataset.id));renderMembers();draw()}
+async function saveReading(e){e.preventDefault();let r=await sb.from('bp_readings').insert({owner_id:user.id,member_id:memberId,reading_at:new Date($('readingAt').value).toISOString(),systolic:+$('sys').value,diastolic:+$('dia').value,pulse:$('pulse').value?+$('pulse').value:null,arm:$('arm').value,position:$('position').value,context:$('context').value,notes:$('notes').value.trim()||null});if(r.error)return status('saveStatus',r.error.message,true);status('saveStatus','Reading saved to the cloud.');$('sys').value='';$('dia').value='';$('pulse').value='';$('notes').value='';$('readingAt').value=nowLocal();await refresh()}
+async function delReading(id){if(!confirm('Delete this reading?'))return;let r=await sb.from('bp_readings').delete().eq('id',id);if(r.error)return status('saveStatus',r.error.message,true);await refresh()}
+function openMember(m){$('modalTitle').textContent=m?'Edit family member':'Add family member';$('memberId').value=m?.id||'';$('memberName').value=m?.name||'';$('memberDob').value=m?.date_of_birth||'';$('memberNotes').value=m?.notes||'';$('deleteMember').classList.toggle('hidden',!m);$('modal').classList.remove('hidden')}
+async function saveMember(e){e.preventDefault();let id=$('memberId').value,p={owner_id:user.id,name:$('memberName').value.trim(),date_of_birth:$('memberDob').value||null,notes:$('memberNotes').value.trim()||null};let r=id?await sb.from('family_members').update(p).eq('id',id).select().single():await sb.from('family_members').insert(p).select().single();if(r.error)return status('memberStatus',r.error.message,true);if(id)members=members.map(m=>m.id===id?r.data:m);else{members.push(r.data);memberId=r.data.id}$('modal').classList.add('hidden');renderMembers();await refresh()}
+async function deleteMember(){let id=$('memberId').value;if(!id||!confirm('Delete this member and all their readings?'))return;let r=await sb.from('family_members').delete().eq('id',id);if(r.error)return status('memberStatus',r.error.message,true);members=members.filter(m=>m.id!==id);memberId=members[0]?.id||null;if(!memberId)await loadMembers();else{$('modal').classList.add('hidden');renderMembers();await refresh()}}
+function csv(){if(!readings.length)return alert('No readings to export.');let m=members.find(x=>x.id===memberId),rows=[['Family Member','Date/Time','Systolic','Diastolic','Pulse','Arm','Position','Context','Category','Notes'],...readings.map(r=>[m?.name,fmt(r.reading_at),r.systolic,r.diastolic,r.pulse??'',r.arm,r.position,r.context,cat(r.systolic,r.diastolic),r.notes||''])];download((m?.name||'family')+'-bp.csv',rows.map(x=>x.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n'),'text/csv')}
+function backup(){download('family-bp-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify({version:3,exported_at:new Date().toISOString(),members,readings},null,2),'application/json')}
+async function restore(e){let f=e.target.files[0];e.target.value='';if(!f)return;try{let p=JSON.parse(await f.text());if(!Array.isArray(p.members)||!Array.isArray(p.readings))throw Error('Invalid backup');if(!confirm('Restore this backup as additional records?'))return;let map={};for(let m of p.members){let r=await sb.from('family_members').insert({owner_id:user.id,name:m.name,date_of_birth:m.date_of_birth||null,notes:m.notes||null}).select().single();if(r.error)throw r.error;map[m.id]=r.data.id}for(let x of p.readings){let mid=map[x.member_id];if(!mid)continue;let r=await sb.from('bp_readings').insert({owner_id:user.id,member_id:mid,reading_at:x.reading_at,systolic:x.systolic,diastolic:x.diastolic,pulse:x.pulse??null,arm:x.arm||'Left',position:x.position||'Sitting',context:x.context||'Other',notes:x.notes||null});if(r.error)throw r.error}memberId=null;await loadMembers();alert('Backup restored.')}catch(e){alert('Restore failed: '+e.message)}}
+function report(){let m=members.find(x=>x.id===memberId),cut=new Date();cut.setDate(cut.getDate()-30);let a=readings.filter(r=>new Date(r.reading_at)>=cut),av=avg(a),p=a.map(x=>x.pulse).filter(Number.isFinite),ap=p.length?Math.round(p.reduce((x,y)=>x+y,0)/p.length):'—',loS=a.length?Math.min(...a.map(x=>x.systolic)):'—',hiS=a.length?Math.max(...a.map(x=>x.systolic)):'—',loD=a.length?Math.min(...a.map(x=>x.diastolic)):'—',hiD=a.length?Math.max(...a.map(x=>x.diastolic)):'—';let rows=a.map(r=>`<tr><td>${esc(fmt(r.reading_at))}</td><td>${r.systolic}/${r.diastolic}</td><td>${r.pulse??'—'}</td><td>${esc(r.context||'')}</td><td>${esc(r.notes||'')}</td></tr>`).join('');let w=window.open('','_blank');if(!w)return alert('Allow pop-ups for this site.');w.document.write(`<!doctype html><title>BP Report</title><style>body{font-family:Arial;margin:32px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#eee}.box{display:inline-block;border:1px solid #ddd;padding:12px;margin:5px}</style><h1>Blood Pressure Report</h1><p>Family member: <b>${esc(m?.name||'')}</b><br>Last 30 days<br>Generated: ${esc(fmt(new Date()))}</p><div><span class="box">Readings<br><b>${a.length}</b></span><span class="box">Average BP<br><b>${av}</b></span><span class="box">Average pulse<br><b>${ap}</b></span><span class="box">Range<br><b>${loS}/${loD} – ${hiS}/${hiD}</b></span></div><p>This is a tracking summary, not a diagnosis.</p><table><tr><th>Date/time</th><th>BP</th><th>Pulse</th><th>Context</th><th>Notes</th></tr>${rows||'<tr><td colspan="5">No readings.</td></tr>'}</table><p><button onclick="print()">Print / Save as PDF</button></p>`);w.document.close()}
+function draw(){let c=$('chart'),ctx=c.getContext('2d'),w=c.clientWidth||500,h=260,dpr=devicePixelRatio||1;c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);let cut=new Date();cut.setDate(cut.getDate()-+$('days').value);let a=readings.filter(r=>new Date(r.reading_at)>=cut).slice().sort((x,y)=>new Date(x.reading_at)-new Date(y.reading_at));if(!a.length){ctx.fillStyle='#64748b';ctx.font='14px Arial';ctx.fillText('No readings in this period.',20,30);return}let vals=a.flatMap(r=>[r.systolic,r.diastolic,r.pulse||null].filter(Number.isFinite)),min=Math.max(30,Math.floor((Math.min(...vals)-10)/10)*10),max=Math.min(300,Math.ceil((Math.max(...vals)+10)/10)*10),L=42,R=15,T=15,B=25,pw=w-L-R,ph=h-T-B;ctx.strokeStyle='#e2e8f0';ctx.fillStyle='#64748b';ctx.font='11px Arial';for(let i=0;i<=5;i++){let y=T+ph*i/5,v=Math.round(max-(max-min)*i/5);ctx.beginPath();ctx.moveTo(L,y);ctx.lineTo(w-R,y);ctx.stroke();ctx.fillText(v,5,y+4)}[['systolic','#2563eb'],['diastolic','#dc2626'],['pulse','#16a34a']].forEach(([key,color])=>{let pts=a.map((r,i)=>Number.isFinite(r[key])?{x:L+(a.length===1?pw/2:pw*i/(a.length-1)),y:T+ph*(1-(r[key]-min)/(max-min))}:null).filter(Boolean);if(!pts.length)return;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke()})}
+function download(name,text,type){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$('authForm').onsubmit=auth;$('toggleAuth').onclick=toggleAuth;$('forgotPassword').onclick=showResetRequest;$('backToSignIn').onclick=showSignIn;$('resetRequestForm').onsubmit=requestPasswordReset;$('newPasswordForm').onsubmit=updatePassword;$('signOut').onclick=()=>sb.auth.signOut();$('memberSelect').onchange=async e=>{memberId=e.target.value;await refresh()};$('addMember').onclick=()=>openMember();$('editMember').onclick=()=>openMember(members.find(m=>m.id===memberId));$('close').onclick=()=>$('modal').classList.add('hidden');$('cancel').onclick=()=>$('modal').classList.add('hidden');$('memberForm').onsubmit=saveMember;$('deleteMember').onclick=deleteMember;$('readingForm').onsubmit=saveReading;$('days').onchange=draw;$('csv').onclick=csv;$('report').onclick=report;$('backup').onclick=backup;$('restore').onchange=restore;$('refresh').onclick=refresh;addEventListener('resize',draw);start();
