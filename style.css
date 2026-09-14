@@ -1,0 +1,35 @@
+* { box-sizing: border-box; }
+body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:#f1f5f9; color:#0f172a; }
+.container { max-width:1100px; margin:auto; padding:24px; }
+header { display:flex; justify-content:space-between; gap:20px; align-items:center; margin-bottom:20px; }
+h1 { margin:0 0 5px; font-size:clamp(1.6rem,4vw,2.2rem); }
+h2 { margin:0 0 16px; font-size:1.15rem; }
+p { color:#64748b; margin:0; }
+.card { background:white; border-radius:14px; padding:20px; box-shadow:0 2px 10px rgba(15,23,42,.06); margin-bottom:18px; }
+.grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+label { display:flex; flex-direction:column; gap:6px; font-size:.9rem; font-weight:600; color:#334155; }
+input, select { width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:11px; font:inherit; background:white; }
+.wide { grid-column:span 3; }
+button { border:0; border-radius:8px; padding:11px 16px; font-weight:700; cursor:pointer; background:#0f172a; color:white; }
+form button { margin-top:16px; }
+.secondary { background:#334155; }
+.danger-outline { background:white; color:#b91c1c; border:1px solid #fecaca; }
+.stats { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+.stat { margin:0; }
+.stat span,.stat small { display:block; color:#64748b; }
+.stat strong { display:block; font-size:1.6rem; margin:5px 0; }
+.section-title { display:flex; justify-content:space-between; align-items:center; }
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:.9rem; }
+th,td { text-align:left; padding:11px 8px; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+th { color:#475569; }
+.delete { background:transparent; color:#b91c1c; padding:4px 8px; }
+.empty { padding:20px 0 4px; text-align:center; }
+footer { text-align:center; font-size:.8rem; padding:8px; }
+@media (max-width:700px) {
+  .container { padding:14px; }
+  header { align-items:flex-start; flex-direction:column; }
+  .grid,.stats { grid-template-columns:1fr; }
+  .wide { grid-column:auto; }
+  .card { padding:15px; }
+}

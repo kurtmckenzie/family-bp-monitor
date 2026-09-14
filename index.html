@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>BP Monitor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <div>
+        <h1>Blood Pressure Monitor</h1>
+        <p>Private, browser-based tracking. Data stays on this device unless you export it.</p>
+      </div>
+      <button id="exportBtn" class="secondary">Export CSV</button>
+    </header>
+
+    <section class="card">
+      <h2>Add Reading</h2>
+      <form id="readingForm">
+        <div class="grid">
+          <label>Date & time
+            <input id="datetime" type="datetime-local" required>
+          </label>
+          <label>Systolic (mmHg)
+            <input id="systolic" type="number" min="50" max="300" required placeholder="e.g. 128">
+          </label>
+          <label>Diastolic (mmHg)
+            <input id="diastolic" type="number" min="30" max="200" required placeholder="e.g. 82">
+          </label>
+          <label>Pulse (bpm)
+            <input id="pulse" type="number" min="30" max="250" placeholder="Optional">
+          </label>
+          <label>Arm
+            <select id="arm">
+              <option>Left</option>
+              <option>Right</option>
+            </select>
+          </label>
+          <label>Position
+            <select id="position">
+              <option>Sitting</option>
+              <option>Standing</option>
+              <option>Lying</option>
+            </select>
+          </label>
+          <label class="wide">Notes
+            <input id="notes" type="text" maxlength="200" placeholder="Optional — e.g. before breakfast">
+          </label>
+        </div>
+        <button type="submit">Save Reading</button>
+      </form>
+    </section>
+
+    <section class="stats">
+      <div class="stat card"><span>Today</span><strong id="todayCount">0</strong><small>readings</small></div>
+      <div class="stat card"><span>Average BP</span><strong id="avgBp">—</strong><small>all saved readings</small></div>
+      <div class="stat card"><span>Latest</span><strong id="latestBp">—</strong><small id="latestTime">—</small></div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <h2>Readings</h2>
+        <button id="clearBtn" class="danger-outline">Clear all</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date/Time</th><th>BP</th><th>Pulse</th><th>Arm</th><th>Position</th><th>Notes</th><th></th></tr>
+          </thead>
+          <tbody id="readingsBody"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="empty">No readings yet.</p>
+    </section>
+
+    <footer>
+      For personal tracking only. This app does not diagnose or treat medical conditions.
+    </footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
